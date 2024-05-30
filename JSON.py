@@ -1,3 +1,22 @@
+import re
+
+from enum import Enum
+
+
+class Symbols(Enum):
+    OPEN_BRACE    = "{"
+    CLOSE_BRACE   = "}"
+    OPEN_BRACKET  = "["
+    CLOSE_BRACKET = "]"
+    COMMA         = ","
+    COLON         = ":"
+
+class Token:
+    def __init__(self, token_type: str, value: str | int | bool):
+        self.type = token_type
+        self.value = value
+
+
 class Parser:
     def __init__(self):
         # We'll use this to set up some properties on the class 
@@ -30,4 +49,76 @@ class Parser:
         # For now, we assume the data is correct. Each opening bracket has 
         # a closing bracket but later, we'll need to account for missing/incorrect
         # data.
-        pass
+        tokens = self.tokenize(data)
+        print(f'There are {len(tokens)} tokens')
+        for token in tokens:
+            print(token.type, token.value)
+
+    def get_full_string(self, data: str, start: int):
+        idx = data[start:].find('"')
+        if idx != -1:
+            return data[start:start+idx]
+        return None
+
+    def tokenize(self, data: str) -> []:
+        if data[0] not in [Symbols.OPEN_BRACKET.value, Symbols.OPEN_BRACE.value]:
+            print('Not valid JSON. Womp womp.')
+            return
+
+        print('We got valid JSON baybeeeeee!')
+
+        current = 0
+        non_char_pattern = re.compile(r'[\d\w]')
+        whitespace_pattern = re.compile(r'\s')
+
+        print(f'Processing data of length {len(data)}')
+
+        tokens = []
+        while current < len(data):
+            char = data[current]
+
+            match char:
+                case Symbols.OPEN_BRACE.value:
+                    tokens.append(Token("BraceOpen", char))
+                case Symbols.CLOSE_BRACE.value:
+                    tokens.append(Token("BraceClose", char))
+                case  Symbols.OPEN_BRACKET.value:
+                    tokens.append(Token("BracketOpen", char))
+                case Symbols.CLOSE_BRACKET.value:
+                    tokens.append(Token("BracketClose", char))
+                case Symbols.COMMA.value:
+                    tokens.append(Token("Comma", char))
+                case Symbols.COLON.value:
+                    tokens.append(Token("Colon", char))
+                case '"':
+                    string = self.get_full_string(data, current + 1)
+                    if string:
+                        # print(f'Found a string {string} between {current} and {current + len(string) + 1}')
+                        tokens.append(Token("String", string))
+                        current += (len(string) + 2)
+                        continue
+                    else:
+                        raise ValueError(
+                                f"JSON string found with no corresponding closing \" char (current: {current} {data[current-5:current+10]})"
+                        )
+
+            if non_char_pattern.match(char):
+                if char.isnumeric():
+                    tokens.append(Token("Number", char))
+                elif char == 'null':
+                    tokens.append(Token("Null", char))
+                elif char == 'true':
+                    tokens.append(Token("True", char))
+                elif char == 'false':
+                    tokens.append(Token("False", char))
+                else:
+                    raise ValueError(f"Unexpected value: {char}")
+
+            if whitespace_pattern.match(char):
+                current += 1
+                continue
+
+            current += 1
+
+        print(f'Current: {current}')
+        return tokens
