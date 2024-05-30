@@ -61,6 +61,7 @@ class Parser:
         return None
 
     def tokenize(self, data: str) -> []:
+        # If the opening char isn't a valid opening char, exit
         if data[0] not in [Symbols.OPEN_BRACKET.value, Symbols.OPEN_BRACE.value]:
             print('Not valid JSON. Womp womp.')
             return
@@ -68,15 +69,21 @@ class Parser:
         print('We got valid JSON baybeeeeee!')
 
         current = 0
+        # Compile some ReGex for finding ints, floats, booleans and numbers as well as whitespace
         non_char_pattern = re.compile(r'[\d\w]')
         whitespace_pattern = re.compile(r'\s')
 
         print(f'Processing data of length {len(data)}')
 
+        # Store the Tokens we find for later processing
         tokens = []
+
+        # While our current character isn't the end of the string
         while current < len(data):
+            # Get the current char
             char = data[current]
 
+            # match statement to check against the accepted symbols and for strings
             match char:
                 case Symbols.OPEN_BRACE.value:
                     tokens.append(Token("BraceOpen", char))
@@ -93,15 +100,16 @@ class Parser:
                 case '"':
                     string = self.get_full_string(data, current + 1)
                     if string:
-                        # print(f'Found a string {string} between {current} and {current + len(string) + 1}')
                         tokens.append(Token("String", string))
                         current += (len(string) + 2)
                         continue
                     else:
                         raise ValueError(
-                                f"JSON string found with no corresponding closing \" char (current: {current} {data[current-5:current+10]})"
+                            f"JSON string found with no corresponding closing \" char"
                         )
 
+            # If the char doesn't match the accepted symbols and isn't a string,
+            # check if it's an int, float, null or boolean
             if non_char_pattern.match(char):
                 if char.isnumeric():
                     tokens.append(Token("Number", char))
@@ -114,11 +122,11 @@ class Parser:
                 else:
                     raise ValueError(f"Unexpected value: {char}")
 
+            # If it's whitespace, ignore and move on
             if whitespace_pattern.match(char):
                 current += 1
                 continue
 
             current += 1
 
-        print(f'Current: {current}')
         return tokens
