@@ -1,9 +1,14 @@
 import re
+import time
 
 from enum import Enum
 
 
 class Symbols(Enum):
+    '''
+    These are the accepted symbols in JSON. We'll use these to find/split
+    segments of the string into Tokens
+    '''
     OPEN_BRACE    = "{"
     CLOSE_BRACE   = "}"
     OPEN_BRACKET  = "["
@@ -11,10 +16,14 @@ class Symbols(Enum):
     COMMA         = ","
     COLON         = ":"
 
+
 class Token:
     def __init__(self, token_type: str, value: str | int | bool):
-        self.type = token_type
+        self.token_type = token_type
         self.value = value
+
+    def __dict__(self):
+        return {"token_type": self.token_type, "value": self.value}
 
 
 class Parser:
@@ -49,10 +58,50 @@ class Parser:
         # For now, we assume the data is correct. Each opening bracket has 
         # a closing bracket but later, we'll need to account for missing/incorrect
         # data.
+        start = time.time()
+
         tokens = self.tokenize(data)
+
+        end = time.time()
+        print(f'Took {end - start} seconds')
+
         print(f'There are {len(tokens)} tokens')
-        for token in tokens:
-            print(token.type, token.value)
+
+        if len(tokens) == 0:
+            print('No tokens could be found. Exiting')
+            sys.exit()
+
+        current = 0
+
+    def parse_token(self, token: Token):
+        value = token.value
+        token_type = token.token_type
+        match token_type:
+            case "String":
+                return { token_type: token_type, value: str(value) } 
+            case "Number":
+                if "." in value:
+                    return { token_type: token_type, value: float(value) }
+                else:
+                    return { token_type: token_type, value: int(value) }
+            case "True":
+                return { token_type: "Boolean", value: True }
+            case "False":
+                return { token_type: "Boolean", value: False }
+            case "Null":
+                return { token_type: "Null", value: None }
+            case "BraceOpen":
+                return self.parse_object(value)
+            case "BracketOpen":
+                return self.parse_array(value)
+            case _:
+                raise ValueError("Got a Token.token_type that was unexpected. Exiting")
+
+    def parse_object(self, obj):
+        pass
+
+    def parse_array(self):
+        pass
 
     def get_full_string(self, data: str, start: int):
         idx = data[start:].find('"')
