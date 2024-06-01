@@ -1,5 +1,6 @@
 import re
 import time
+import sys
 
 from enum import Enum
 
@@ -25,13 +26,22 @@ class Token:
     def __dict__(self):
         return {"token_type": self.token_type, "value": self.value}
 
+    def __str__(self):
+        return f'[{self.token_type}] {self.value}'
+
 
 class Parser:
     def __init__(self):
         # We'll use this to set up some properties on the class 
         # (apparently called Class Variables in Python but that 
         # sounds terrible so we're not doing that)
-        pass
+        self.tokens: [Token] = []
+        self.counter = 0
+
+    def advance(self):
+        token = self.tokens[self.counter]
+        self.counter += 1
+        return token
 
     def parse(self, data: str):
         # This is the main function. We need to split out the data
@@ -60,36 +70,39 @@ class Parser:
         # data.
         start = time.time()
 
-        tokens = self.tokenize(data)
+        self.tokens = self.tokenize(data)
 
         end = time.time()
         print(f'Took {end - start} seconds')
 
-        print(f'There are {len(tokens)} tokens')
+        print(f'There are {len(self.tokens)} tokens')
 
-        if len(tokens) == 0:
+        if len(self.tokens) == 0:
             print('No tokens could be found. Exiting')
             sys.exit()
 
-        current = 0
+        while self.counter < len(self.tokens):
+            token = self.advance()
+            node = self.parse_token(token)
+            print(node)
 
     def parse_token(self, token: Token):
         value = token.value
         token_type = token.token_type
         match token_type:
             case "String":
-                return { token_type: token_type, value: str(value) } 
+                return {"type": token_type, value: str(value)}
             case "Number":
                 if "." in value:
-                    return { token_type: token_type, value: float(value) }
+                    return {"type": token_type, value: float(value)}
                 else:
-                    return { token_type: token_type, value: int(value) }
+                    return {"type": token_type, value: int(value)}
             case "True":
-                return { token_type: "Boolean", value: True }
+                return {"type": "Boolean", value: True}
             case "False":
-                return { token_type: "Boolean", value: False }
+                return {"type": "Boolean", value: False}
             case "Null":
-                return { token_type: "Null", value: None }
+                return {"type": "Null", value: None}
             case "BraceOpen":
                 return self.parse_object(value)
             case "BracketOpen":
@@ -97,11 +110,45 @@ class Parser:
             case _:
                 raise ValueError("Got a Token.token_type that was unexpected. Exiting")
 
-    def parse_object(self, obj):
-        pass
+    def parse_object(self, obj) -> {}:
+        node = {"type": "Object", "value": {}}
+        print("Starting to parse object", obj)
+        token = self.advance()
 
-    def parse_array(self):
-        pass
+        while token.token_type != "BraceClose":
+            print(token)
+            if token.token_type == "String":
+                key = token.value
+                token = self.advance()
+                print("Token before Colon check", token)
+                if token.token_type != "Colon":
+                    raise ValueError("Expected : in key-value pair")
+                token = self.advance()
+                print("Token after Colon check", token)
+                value = self.parse_token(token)
+                node["value"][key] = value
+            else:
+                raise ValueError(f"Expected String key in object. Token type {token.token_type}")
+            token = self.advance()
+            print('Final token before Comma check', token)
+            if token.token_type == "Comma":
+                token = self.advance()
+            print('Final final token', token, '\n')
+        return node
+
+    def parse_array(self, array):
+        node = {"type": "Array", "value": []}
+        token = self.advance()
+
+        while token.token_type != "BracketClose":
+            value = self.parse_token(token)
+            node["value"].append(value)
+
+            token = self.advance()
+            if token.token_type == "Comma":
+                token = self.advance()
+
+        return node
 
     def get_full_string(self, data: str, start: int):
         idx = data[start:].find('"')
@@ -119,7 +166,7 @@ class Parser:
 
         current = 0
         # Compile some ReGex for finding ints, floats, booleans and numbers as well as whitespace
-        non_char_pattern = re.compile(r'[\d\w]')
+        non_char_pattern = re.compile(r'[\d\w|\d+\.]')
         whitespace_pattern = re.compile(r'\s')
 
         print(f'Processing data of length {len(data)}')
@@ -132,20 +179,32 @@ class Parser:
             # Get the current char
             char = data[current]
 
-            # match statement to check against the accepted symbols and for strings
+            # match statement to check for accepted symbols and strings
             match char:
-                case Symbols.OPEN_BRACE.value:
+                case "{":
                     tokens.append(Token("BraceOpen", char))
-                case Symbols.CLOSE_BRACE.value:
+                    current += 1
+                    continue
+                case "}":
                     tokens.append(Token("BraceClose", char))
-                case  Symbols.OPEN_BRACKET.value:
+                    current += 1
+                    continue
+                case "[":
                     tokens.append(Token("BracketOpen", char))
-                case Symbols.CLOSE_BRACKET.value:
+                    current += 1
+                    continue
+                case "]":
                     tokens.append(Token("BracketClose", char))
-                case Symbols.COMMA.value:
+                    current += 1
+                    continue
+                case ",":
                     tokens.append(Token("Comma", char))
-                case Symbols.COLON.value:
+                    current += 1
+                    continue
+                case ":":
                     tokens.append(Token("Colon", char))
+                    current += 1
+                    continue
                 case '"':
                     string = self.get_full_string(data, current + 1)
                     if string:
@@ -154,28 +213,34 @@ class Parser:
                         continue
                     else:
                         raise ValueError(
-                            f"JSON string found with no corresponding closing \" char"
+                            "JSON string found with no closing \" char"
                         )
 
-            # If the char doesn't match the accepted symbols and isn't a string,
-            # check if it's an int, float, null or boolean
             if non_char_pattern.match(char):
-                if char.isnumeric():
-                    tokens.append(Token("Number", char))
-                elif char == 'null':
-                    tokens.append(Token("Null", char))
-                elif char == 'true':
-                    tokens.append(Token("True", char))
-                elif char == 'false':
-                    tokens.append(Token("False", char))
+                value = ''
+                while non_char_pattern.match(char):
+                    value += char
+                    current += 1
+                    char = data[current]
+
+                # If the char doesn't match the accepted symbols and isn't
+                # a string, check if it's an int, float, null or boolean
+                if value.isnumeric():
+                    tokens.append(Token("Number", value))
+                elif value == 'null':
+                    tokens.append(Token("Null", value))
+                elif value == 'true':
+                    tokens.append(Token("True", value))
+                elif value == 'false':
+                    tokens.append(Token("False", value))
+                elif '.' in value:
+                    tokens.append(Token("Number", value))
                 else:
-                    raise ValueError(f"Unexpected value: {char}")
+                    raise ValueError(f"Unexpected value: {value}")
 
             # If it's whitespace, ignore and move on
             if whitespace_pattern.match(char):
                 current += 1
                 continue
-
-            current += 1
 
         return tokens
