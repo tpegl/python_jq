@@ -91,18 +91,18 @@ class Parser:
         token_type = token.token_type
         match token_type:
             case "String":
-                return {"type": token_type, value: str(value)}
+                return {"type": token_type, "value": str(value)}
             case "Number":
                 if "." in value:
-                    return {"type": token_type, value: float(value)}
+                    return {"type": token_type, "value": float(value)}
                 else:
-                    return {"type": token_type, value: int(value)}
+                    return {"type": token_type, "value": int(value)}
             case "True":
-                return {"type": "Boolean", value: True}
+                return {"type": "Boolean", "value": True}
             case "False":
-                return {"type": "Boolean", value: False}
+                return {"type": "Boolean", "value": False}
             case "Null":
-                return {"type": "Null", value: None}
+                return {"type": "Null", "value": None}
             case "BraceOpen":
                 return self.parse_object(value)
             case "BracketOpen":
